@@ -13,12 +13,13 @@ export default async function handler(req) {
 
     const body = await req.json();
 
-    if (!body.messages || !Array.isArray(body.messages)) {
-      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    // Fallback für leeres messages[]
+    const messages = body?.messages || [
+      {
+        role: 'user',
+        content: 'Start',
+      }
+    ];
 
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -31,29 +32,38 @@ export default async function handler(req) {
         messages: [
           {
             role: 'system',
-            content: `Du bist ein deutschsprachiger Vertriebsassistent für Advisy ...`,
+            content: `Du bist ein deutschsprachiger Vertriebsassistent der Firma Advisy. 
+Dein Ziel ist es, Entscheider in E-Commerce-Unternehmen zu überzeugen, ein 15-minütiges Strategiegespräch zu führen.
+Du sprichst direkt, charmant, leicht provokant und auf Augenhöhe.`
           },
-          ...body.messages,
-        ],
+          ...messages
+        ]
       }),
     });
 
     const gpt = await openaiRes.json();
+
+    // Fallback wenn GPT aussteigt
+    const content = gpt?.choices?.[0]?.message?.content || "Leider keine Antwort von GPT – bitte später erneut versuchen.";
 
     return new Response(JSON.stringify({
       choices: [
         {
           message: {
             role: "assistant",
-            content: gpt.choices[0].message.content,
-          },
-        },
-      ],
+            content
+          }
+        }
+      ]
     }), {
       headers: { 'Content-Type': 'application/json' },
     });
+
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Internal Server Error', detail: err.message }), {
+    return new Response(JSON.stringify({
+      error: 'Internal Server Error',
+      details: err.message || err.toString()
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
